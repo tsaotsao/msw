@@ -835,6 +835,8 @@ function updateStats() {
   statChecking.textContent = checking;
   statCleared.textContent = cleared;
   statBoss.textContent = boss;
+  // Only pulse while a boss is actually marked (an idle animation still costs CPU)
+  statBoss.classList.toggle('pulse-danger', boss > 0);
 
   // Progress is channels checked out of the total count
   const total = state.totalChannels || sync.DEFAULT_TOTAL_CHANNELS;

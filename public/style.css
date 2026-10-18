@@ -86,7 +86,8 @@ body {
   width: 150px;
   height: 50px;
   top: 10%;
-  left: -150px;
+  left: 0;
+  will-change: transform;
   animation: floatCloud 45s linear infinite;
 }
 .cloud-1::before { width: 80px; height: 80px; top: -40px; left: 20px; }
@@ -96,7 +97,8 @@ body {
   width: 200px;
   height: 60px;
   top: 25%;
-  left: -200px;
+  left: 0;
+  will-change: transform;
   animation: floatCloud 60s linear infinite;
   animation-delay: 15s;
 }
@@ -104,8 +106,8 @@ body {
 .cloud-2::after { width: 80px; height: 80px; top: -30px; right: 30px; }
 
 @keyframes floatCloud {
-  0% { left: -250px; }
-  100% { left: 100%; }
+  0% { transform: translateX(-250px); }
+  100% { transform: translateX(100vw); }
 }
 
 .leaf {
@@ -399,14 +401,34 @@ body {
 .channel-card.state-checking {
   border-color: var(--status-checking-border);
   background-color: var(--status-checking-bg);
-  animation: pulseChecking 1.5s infinite alternate;
 }
 .channel-card.state-checking .ch-name {
   color: var(--status-checking-color);
 }
-@keyframes pulseChecking {
-  0% { box-shadow: 0 0 4px rgba(243, 156, 18, 0.4); border-color: #f39c12; }
-  100% { box-shadow: 0 0 12px rgba(243, 156, 18, 0.8); border-color: #f1c40f; }
+
+/* Pulsing glow overlay shared by checking/boss cards. Only opacity animates,
+   so the GPU composites it without repainting the grid every frame. */
+.channel-card.state-checking::after,
+.channel-card.state-boss::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  will-change: opacity;
+}
+.channel-card.state-checking::after {
+  box-shadow: inset 0 0 0 2px #f1c40f, inset 0 0 8px rgba(243, 156, 18, 0.8);
+  animation: glowPulse 1.5s infinite alternate;
+}
+.channel-card.state-boss::after {
+  background-color: rgba(231, 76, 60, 0.18);
+  box-shadow: inset 0 0 0 2px #c0392b, inset 0 0 10px rgba(231, 76, 60, 0.9);
+  animation: glowPulse 0.6s infinite alternate;
+}
+@keyframes glowPulse {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 /* 3. Cleared (No Boss - Gray) */
@@ -423,16 +445,10 @@ body {
 .channel-card.state-boss {
   border-color: var(--status-boss-border);
   background-color: var(--status-boss-bg);
-  animation: flashDanger 1.2s infinite;
 }
 .channel-card.state-boss .ch-name {
   color: var(--status-boss-color);
   font-weight: 900;
-}
-@keyframes flashDanger {
-  0% { box-shadow: 0 0 4px rgba(231, 76, 60, 0.4); border-color: #e74c3c; background-color: #fdedec; }
-  50% { box-shadow: 0 0 16px rgba(231, 76, 60, 0.9); border-color: #c0392b; background-color: #fadbd8; }
-  100% { box-shadow: 0 0 4px rgba(231, 76, 60, 0.4); border-color: #e74c3c; background-color: #fdedec; }
 }
 
 /* Window Footer Progress Info */
@@ -624,11 +640,13 @@ body {
 .stat-item.boss .stat-count { color: var(--status-boss-border); }
 
 .pulse-danger {
+  display: inline-block;
+  will-change: transform;
   animation: pulseDangerText 1s infinite alternate;
 }
 @keyframes pulseDangerText {
-  0% { transform: scale(1); text-shadow: 0 0 0px rgba(231,76,60,0); }
-  100% { transform: scale(1.15); text-shadow: 0 0 4px rgba(231,76,60,0.5); }
+  0% { transform: scale(1); opacity: 0.75; }
+  100% { transform: scale(1.15); opacity: 1; }
 }
 
 /* Buttons */
@@ -1114,11 +1132,6 @@ body {
 }
 .channel-grid.compact-mode .channel-card.state-checking .ch-name {
   color: #d35400;
-  animation: pulseCheckingText 1.2s infinite alternate;
-}
-@keyframes pulseCheckingText {
-  0% { opacity: 0.6; }
-  100% { opacity: 1; }
 }
 
 .channel-grid.compact-mode .channel-card.state-cleared {
@@ -1132,16 +1145,10 @@ body {
 .channel-grid.compact-mode .channel-card.state-boss {
   background-color: #fadbd8; /* soft light red background */
   border-color: #e74c3c;
-  animation: flashDangerCompact 1.2s infinite;
 }
 .channel-grid.compact-mode .channel-card.state-boss .ch-name {
   color: #78281f;
   font-weight: 900;
-}
-@keyframes flashDangerCompact {
-  0% { box-shadow: 0 0 2px rgba(231, 76, 60, 0.4); background-color: #fadbd8; }
-  50% { box-shadow: 0 0 8px rgba(231, 76, 60, 0.8); background-color: #f5b7b1; }
-  100% { box-shadow: 0 0 2px rgba(231, 76, 60, 0.4); background-color: #fadbd8; }
 }
 
 /* Hide details in compact card */
