@@ -34,7 +34,6 @@
           <button class="ms-btn-icon" title="求助" id="help-btn">?</button>
           <button class="ms-btn-icon" title="最小化">-</button>
           <button class="ms-btn-icon" title="最大化">⬜</button>
-          <button class="ms-btn-icon close-btn" title="關閉" onclick="alert('請直接關閉瀏覽器分頁以離開！')">×</button>
         </div>
       </div>
 
@@ -46,7 +45,7 @@
         </div>
         <div class="banner-right">
           <span>可供巡邏的頻道：</span>
-          <strong class="count-highlight" id="total-ch-display">50 個</strong>
+          <strong class="count-highlight" id="total-ch-display">1000 個</strong>
         </div>
       </div>
 
@@ -83,22 +82,16 @@
             <input type="text" id="username-input" maxlength="10" placeholder="輸入暱稱..." value="冒險者">
           </div>
           <div class="input-group">
-            <label for="user-color-input">標記顏色：</label>
-            <div class="color-picker-container">
-              <input type="color" id="user-color-input" value="#4385f4">
-              <span class="color-preview-label" id="color-preview">藍色</span>
+            <label>房間號碼：</label>
+            <div class="room-row">
+              <strong id="room-code-display">-</strong>
+              <button type="button" class="ms-btn ms-btn-small" id="copy-invite-btn">📋 複製房間連結</button>
+              <button type="button" class="ms-btn ms-btn-small" id="leave-room-btn">🚪 離開房間</button>
             </div>
           </div>
           <div class="input-group">
-            <label>房間代碼：</label>
-            <div class="color-picker-container">
-              <strong id="room-code-display">--------</strong>
-              <button type="button" class="ms-btn ms-btn-small" id="copy-invite-btn">📋 複製邀請連結</button>
-            </div>
-          </div>
-          <div class="input-group">
-            <label for="channel-count-input">設定頻道數量 (1-3000)：</label>
-            <input type="number" id="channel-count-input" min="1" max="3000" value="50">
+            <label for="channel-count-input">頻道數量：<span id="channel-count-value">1000</span></label>
+            <input type="range" id="channel-count-input" min="1" max="3000" step="1" value="1000">
           </div>
         </div>
       </section>
@@ -108,7 +101,7 @@
         <h2 class="panel-title">📊 巡邏統計</h2>
         <div class="stats-grid">
           <div class="stat-item unchecked">
-            <span class="stat-count" id="stat-unchecked">50</span>
+            <span class="stat-count" id="stat-unchecked">1000</span>
             <span class="stat-label">未檢查</span>
           </div>
           <div class="stat-item checking">
@@ -187,6 +180,37 @@
     </div>
   </div>
 
+  <!-- Lobby: create or join a password-protected room -->
+  <div class="modal-overlay" id="lobby-modal" style="display: none;">
+    <div class="ms-modal">
+      <div class="ms-window-header">
+        <span class="ms-window-title">🍁 楓之谷頻道巡邏追蹤器</span>
+      </div>
+      <div class="ms-modal-content">
+        <div class="tabs-header lobby-tabs">
+          <button type="button" class="tab-btn active" data-mode="join">🔑 加入房間</button>
+          <button type="button" class="tab-btn" data-mode="create">➕ 建立房間</button>
+        </div>
+        <form id="lobby-form" class="user-inputs" autocomplete="off">
+          <div class="input-group">
+            <label for="lobby-room-input">房間號碼 (3-20 個英文、數字、- 或 _)：</label>
+            <input type="text" id="lobby-room-input" maxlength="20" placeholder="例如 myteam" required>
+          </div>
+          <div class="input-group">
+            <label for="lobby-password-input">房間密碼：</label>
+            <input type="password" id="lobby-password-input" maxlength="50" placeholder="輸入密碼" required>
+          </div>
+          <div class="input-group">
+            <label for="lobby-name-input">我的暱稱：</label>
+            <input type="text" id="lobby-name-input" maxlength="10" placeholder="輸入暱稱..." required>
+          </div>
+          <p class="lobby-error" id="lobby-error"></p>
+          <button type="submit" class="ms-btn" id="lobby-submit-btn">進入房間</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Help Overlay Modal -->
   <div class="modal-overlay" id="help-modal" style="display: none;">
     <div class="ms-modal">
@@ -196,15 +220,16 @@
       </div>
       <div class="ms-modal-content">
         <h3>💡 如何使用這個追蹤器？</h3>
-        <p>1. <strong>設定暱稱</strong>：在右側面板輸入您的暱稱與代表顏色，讓隊友知道誰在標記頻道。</p>
-        <p>2. <strong>標記狀態</strong>：點擊左側頻道清單中的任一頻道，將會跳出選單，您可以選擇：</p>
+        <p>1. <strong>設定暱稱</strong>：在右側面板輸入您的暱稱，讓隊友知道誰在標記頻道。</p>
+        <p>2. <strong>標記狀態</strong>：點擊左側頻道會依序切換：</p>
         <ul>
-          <li><strong>🔍 巡邏中</strong>：代表您正在換該頻道，避免隊友重複進去。</li>
-          <li><strong>❌ 無王</strong>：確認沒王後點選，會轉為已檢查狀態並開始計時。</li>
-          <li><strong>👾 有王</strong>：若發現王，點選後會紅光閃爍，提醒所有隊友！</li>
+          <li><strong>第一下 ⬜ 無王</strong>：頻道變成灰色，並開始計時。</li>
+          <li><strong>第二下 👾 有王</strong>：頻道紅光閃爍，提醒所有隊友！</li>
+          <li><strong>第三下</strong>：重設回未檢查。</li>
+          <li>按住滑鼠拖曳，可以一次把經過的頻道都標成無王。</li>
         </ul>
         <p>3. <strong>計時功能</strong>：每個被標記為「無王」或「有王」的頻道，都會顯示<b>經過時間</b>，方便您掌握王的重生週期。</p>
-        <p>4. <strong>多人協作 (房間)</strong>：網址後面的 <code>?room=xxxx</code> 就是房間代碼。按右側「📋 複製邀請連結」分享給隊友，同一個房間的人就能在任何地方<b>即時同步</b>點擊狀態與對話！</p>
+        <p>4. <strong>多人協作 (房間)</strong>：把<b>房間號碼和密碼</b>告訴隊友，隊友在進入畫面選「加入房間」輸入後，大家就能在任何地方<b>即時同步</b>點擊狀態與對話！也可以按「📋 複製房間連結」，隊友打開連結時會自動帶入房間號碼，只要再輸入密碼。</p>
       </div>
       <div class="ms-modal-footer">
         <button class="ms-btn" id="close-help-confirm-btn">我知道了</button>

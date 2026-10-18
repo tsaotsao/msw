@@ -217,23 +217,13 @@ const state = {
   },
   selectedChId: null,
   roomId: '',
-  totalChannels: 50,
+  totalChannels: sync.DEFAULT_TOTAL_CHANNELS,
   drag: {
     isMouseDown: false,
     isTouchDown: false,
     hasDragged: false,
     startChId: null
   }
-};
-
-// Colors lookup for label displaying
-const colorNames = {
-  '#4385f4': '藍色',
-  '#ea4335': '紅色',
-  '#34a853': '綠色',
-  '#fbbc05': '黃色',
-  '#9b59b6': '紫色',
-  '#e67e22': '橘色'
 };
 
 // DOM Elements
@@ -248,16 +238,25 @@ const chatMessages = document.getElementById('chat-messages');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
 const usernameInput = document.getElementById('username-input');
-const userColorInput = document.getElementById('user-color-input');
-const colorPreview = document.getElementById('color-preview');
 const resetAllBtn = document.getElementById('reset-all-btn');
 const progressPercentage = document.getElementById('progress-percentage');
 const progressBarFill = document.getElementById('progress-bar-fill');
 const channelCountInput = document.getElementById('channel-count-input');
+const channelCountValue = document.getElementById('channel-count-value');
 const totalChDisplay = document.getElementById('total-ch-display');
 const muteBtn = document.getElementById('mute-btn');
 const appContainer = document.querySelector('.app-container');
 const roomCodeDisplay = document.getElementById('room-code-display');
+const leaveRoomBtn = document.getElementById('leave-room-btn');
+
+// Lobby elements
+const lobbyModal = document.getElementById('lobby-modal');
+const lobbyForm = document.getElementById('lobby-form');
+const lobbyRoomInput = document.getElementById('lobby-room-input');
+const lobbyPasswordInput = document.getElementById('lobby-password-input');
+const lobbyNameInput = document.getElementById('lobby-name-input');
+const lobbyError = document.getElementById('lobby-error');
+const lobbySubmitBtn = document.getElementById('lobby-submit-btn');
 const copyInviteBtn = document.getElementById('copy-invite-btn');
 
 // Popover menu elements
@@ -293,19 +292,15 @@ function initUserSettings() {
     localStorage.setItem('msw_boss_username', defaultName);
   }
 
+  // Auto-assigned color for the online list and chat names
   if (storedColor) {
-    userColorInput.value = storedColor;
     state.currentUser.color = storedColor;
   } else {
-    // Set a default nice color
     const colors = ['#4385f4', '#34a853', '#9b59b6', '#e67e22'];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
-    userColorInput.value = randomColor;
     state.currentUser.color = randomColor;
     localStorage.setItem('msw_boss_color', randomColor);
   }
-  
-  updateColorLabel(userColorInput.value);
 
   // Load mute setting from localStorage
   const storedMuted = localStorage.getItem('msw_boss_muted');
@@ -318,24 +313,109 @@ function initUserSettings() {
   }
 }
 
-// Show room code and wire up the invite-link copy button
+// Wire up the room link copy button and leave button
 function initRoomUI() {
-  if (roomCodeDisplay) {
-    roomCodeDisplay.textContent = state.roomId;
-  }
-  if (copyInviteBtn) {
-    copyInviteBtn.addEventListener('click', async () => {
-      sfx.playClick();
-      const url = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(state.roomId)}`;
-      try {
-        await navigator.clipboard.writeText(url);
-        copyInviteBtn.textContent = '✅ 已複製';
-      } catch (err) {
-        window.prompt('複製這個邀請連結給隊友：', url);
-      }
-      setTimeout(() => { copyInviteBtn.textContent = '📋 複製邀請連結'; }, 1500);
+  copyInviteBtn.addEventListener('click', async () => {
+    sfx.playClick();
+    // The link only carries the room ID; teammates still need the password
+    const url = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(state.roomId)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      copyInviteBtn.textContent = '✅ 已複製';
+    } catch (err) {
+      window.prompt('複製這個房間連結給隊友（密碼請另外告訴隊友）：', url);
+    }
+    setTimeout(() => { copyInviteBtn.textContent = '📋 複製房間連結'; }, 1500);
+  });
+
+  leaveRoomBtn.addEventListener('click', () => {
+    try { localStorage.removeItem(SESSION_KEY); } catch (err) { /* ignore */ }
+    // Reloading drops the Firebase connection, which removes our presence entry
+    window.location.href = `${window.location.pathname}?room=${encodeURIComponent(state.roomId)}`;
+  });
+}
+
+const SESSION_KEY = 'msw_boss_session';
+
+function loadSession() {
+  try {
+    const session = JSON.parse(localStorage.getItem(SESSION_KEY));
+    if (session && session.roomId && /^[a-f0-9]{64}$/.test(session.roomKey)) return session;
+  } catch (err) { /* ignore */ }
+  return null;
+}
+
+// Enter a room after the lobby (or a saved session) resolved its key
+function enterRoom(roomId, roomKey) {
+  state.roomId = roomId;
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ roomId, roomKey })); } catch (err) { /* ignore */ }
+  history.replaceState(null, '', `${window.location.pathname}?room=${encodeURIComponent(roomId)}`);
+  roomCodeDisplay.textContent = roomId;
+  lobbyModal.style.display = 'none';
+  connectSync(roomKey);
+}
+
+const LOBBY_ERRORS = {
+  exists: '這個房間號碼已經有人用了，請換一個，或改用「加入房間」。',
+  notfound: '找不到這個房間，請確認房間號碼，或改用「建立房間」。',
+  badpassword: '密碼錯誤。'
+};
+
+function showLobby(prefillRoom) {
+  let mode = 'join';
+  lobbyRoomInput.value = prefillRoom || '';
+  lobbyNameInput.value = state.currentUser.username;
+  lobbyModal.style.display = 'flex';
+  (prefillRoom ? lobbyPasswordInput : lobbyRoomInput).focus();
+
+  lobbyModal.querySelectorAll('.tab-btn').forEach(tab => {
+    tab.addEventListener('click', () => {
+      mode = tab.dataset.mode;
+      lobbyModal.querySelectorAll('.tab-btn').forEach(t => t.classList.toggle('active', t === tab));
+      lobbySubmitBtn.textContent = mode === 'create' ? '建立並進入房間' : '進入房間';
+      lobbyError.textContent = '';
     });
-  }
+  });
+
+  lobbyForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const roomId = lobbyRoomInput.value.trim();
+    const password = lobbyPasswordInput.value;
+    const name = lobbyNameInput.value.trim();
+
+    if (!/^[A-Za-z0-9_-]{3,20}$/.test(roomId)) {
+      lobbyError.textContent = '房間號碼要 3-20 個字，只能用英文、數字、- 或 _。';
+      return;
+    }
+    if (mode === 'create' && password.length < 4) {
+      lobbyError.textContent = '密碼至少要 4 個字。';
+      return;
+    }
+    if (!sync.isConfigured()) {
+      lobbyError.textContent = '尚未設定 Firebase (firebase-config.js)';
+      return;
+    }
+
+    if (name) {
+      state.currentUser.username = name;
+      usernameInput.value = name;
+      localStorage.setItem('msw_boss_username', name);
+    }
+
+    lobbySubmitBtn.disabled = true;
+    lobbyError.textContent = '';
+    try {
+      const roomKey = mode === 'create'
+        ? await sync.createRoom(roomId, password)
+        : await sync.joinRoom(roomId, password);
+      enterRoom(roomId, roomKey);
+    } catch (err) {
+      console.error('進入房間失敗:', err);
+      lobbyError.textContent = LOBBY_ERRORS[err.message] || '連線失敗，請稍後再試。';
+    } finally {
+      lobbySubmitBtn.disabled = false;
+    }
+  });
 }
 
 // Escape user-provided text before inserting into innerHTML
@@ -343,13 +423,6 @@ function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
-}
-
-function updateColorLabel(hex) {
-  const name = colorNames[hex.toLowerCase()] || '自訂';
-  colorPreview.textContent = name;
-  colorPreview.style.borderColor = hex;
-  colorPreview.style.color = hex;
 }
 
 // Helper to compute elapsed time string
@@ -410,7 +483,7 @@ function bindDragEvents(card, chId) {
 
 // Generate channels in the HTML grid dynamically
 function generateGrid(count) {
-  const channelCount = count || state.totalChannels || 50;
+  const channelCount = count || state.totalChannels || sync.DEFAULT_TOTAL_CHANNELS;
   channelGrid.innerHTML = '';
   
   const isCompact = channelCount > 100;
@@ -573,19 +646,6 @@ function hidePopover() {
   state.selectedChId = null;
 }
 
-// Room code from URL (?room=xxx); generate one if missing
-function getRoomId() {
-  const params = new URLSearchParams(window.location.search);
-  let room = (params.get('room') || '').trim();
-  if (!/^[A-Za-z0-9_-]{4,32}$/.test(room)) {
-    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
-    room = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-    params.set('room', room);
-    history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-  }
-  return room;
-}
-
 // Expand the sparse channel map from Firebase into the full 1..N list
 function buildChannels(total, sparse) {
   const channels = {};
@@ -599,7 +659,7 @@ function buildChannels(total, sparse) {
 }
 
 // Firebase realtime connection setup
-function connectSync() {
+function connectSync(roomKey) {
   if (!sync.isConfigured()) {
     connectionDot.className = 'status-dot disconnected';
     connectionText.textContent = '尚未設定 Firebase (firebase-config.js)';
@@ -613,7 +673,7 @@ function connectSync() {
   let channelsLoaded = false;
   let logsLoaded = false;
 
-  sync.connect(state.roomId, state.currentUser, {
+  sync.connect(roomKey, state.currentUser, {
     onConnection(connected) {
       connectionDot.className = `status-dot ${connected ? 'connected' : 'disconnected'}`;
       connectionText.textContent = connected ? '已同步' : '未同步 (嘗試重連)';
@@ -622,9 +682,8 @@ function connectSync() {
     onMeta(total) {
       if (total === state.totalChannels) return;
       state.totalChannels = total;
-      if (channelCountInput) {
-        channelCountInput.value = total;
-      }
+      channelCountInput.value = total;
+      channelCountValue.textContent = total;
       if (totalChDisplay) {
         totalChDisplay.textContent = `${total} 個`;
       }
@@ -636,7 +695,7 @@ function connectSync() {
 
     onChannels(sparse) {
       sparseChannels = sparse;
-      const total = state.totalChannels || 50;
+      const total = state.totalChannels || sync.DEFAULT_TOTAL_CHANNELS;
       const next = buildChannels(total, sparse);
       const myName = state.currentUser.username;
 
@@ -721,7 +780,7 @@ function renderChannel(channel) {
   updateChannelTimer(channel);
 
   // Update tooltip title if in compact mode
-  const isCompact = (state.totalChannels || 50) > 100;
+  const isCompact = (state.totalChannels || sync.DEFAULT_TOTAL_CHANNELS) > 100;
   if (isCompact) {
     let statusText = '未檢查';
     if (channel.status === 'checking') statusText = '巡邏中';
@@ -778,7 +837,7 @@ function updateStats() {
   statBoss.textContent = boss;
 
   // Progress is channels checked out of the total count
-  const total = state.totalChannels || 50;
+  const total = state.totalChannels || sync.DEFAULT_TOTAL_CHANNELS;
   const checked = cleared + boss;
   const percentage = Math.round((checked / total) * 100);
   
@@ -878,21 +937,14 @@ function setupEventListeners() {
       localStorage.setItem('msw_boss_muted', sfx.muted ? 'true' : 'false');
     });
   }
-  // Channel count input change handler (Requirement 2)
-  if (channelCountInput) {
-    channelCountInput.addEventListener('change', () => {
-      let count = parseInt(channelCountInput.value);
-      if (isNaN(count) || count < 1) {
-        count = 50;
-      }
-      if (count > 3000) {
-        count = 3000;
-      }
-      channelCountInput.value = count;
-      
-      sync.setChannelCount(count, state.currentUser.username);
-    });
-  }
+  // Channel count slider: show the value while dragging, sync on release
+  channelCountInput.addEventListener('input', () => {
+    channelCountValue.textContent = channelCountInput.value;
+  });
+  channelCountInput.addEventListener('change', () => {
+    const count = Math.min(3000, Math.max(1, parseInt(channelCountInput.value, 10) || sync.DEFAULT_TOTAL_CHANNELS));
+    sync.setChannelCount(count, state.currentUser.username);
+  });
 
   // Username settings input change
   usernameInput.addEventListener('change', () => {
@@ -903,16 +955,6 @@ function setupEventListeners() {
     }
     state.currentUser.username = name;
     localStorage.setItem('msw_boss_username', name);
-    
-    sync.updatePresence(state.currentUser);
-  });
-
-  // User color input change
-  userColorInput.addEventListener('change', () => {
-    const color = userColorInput.value;
-    state.currentUser.color = color;
-    localStorage.setItem('msw_boss_color', color);
-    updateColorLabel(color);
     
     sync.updatePresence(state.currentUser);
   });
@@ -939,12 +981,12 @@ function setupEventListeners() {
   });
 
   // Tab controls switching
-  const tabs = document.querySelectorAll('.tab-btn');
+  const tabs = document.querySelectorAll('.log-chat-card .tab-btn');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       sfx.playClick();
       // Deactivate all
-      document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+      tabs.forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       
       // Activate selected
@@ -1029,15 +1071,22 @@ function setupEventListeners() {
 
 // Initialize Application
 function init() {
-  state.roomId = getRoomId();
   initUserSettings();
   initRoomUI();
-  state.channels = buildChannels(state.totalChannels || 50, {});
+  state.channels = buildChannels(state.totalChannels, {});
   generateGrid();
   renderAllChannels();
   updateStats();
   setupEventListeners();
-  connectSync();
+
+  // Rejoin the saved room on refresh, unless the link points at a different room
+  const urlRoom = (new URLSearchParams(window.location.search).get('room') || '').trim();
+  const session = loadSession();
+  if (session && (!urlRoom || urlRoom === session.roomId)) {
+    enterRoom(session.roomId, session.roomKey);
+  } else {
+    showLobby(urlRoom);
+  }
   
   // Start relative time ticker (ticks timers every 5 seconds)
   setInterval(tickTimers, 5000);

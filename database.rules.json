@@ -1,9 +1,19 @@
 {
   "rules": {
+    "lobby": {
+      "$roomId": {
+        ".read": "$roomId.matches(/^[A-Za-z0-9_-]{3,20}$/)",
+        ".write": "$roomId.matches(/^[A-Za-z0-9_-]{3,20}$/) && !data.exists()",
+        ".validate": "newData.hasChildren(['verifier', 'createdAt'])",
+        "verifier": { ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{64}$/)" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      }
+    },
     "rooms": {
       "$room": {
-        ".read": "$room.matches(/^[A-Za-z0-9_-]{4,32}$/)",
-        ".write": "$room.matches(/^[A-Za-z0-9_-]{4,32}$/)",
+        ".read": "$room.matches(/^[a-f0-9]{64}$/)",
+        ".write": "$room.matches(/^[a-f0-9]{64}$/)",
         "meta": {
           "totalChannels": {
             ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 3000"

@@ -25,9 +25,9 @@
   --status-checking-border: #f39c12;
   --status-checking-color: #d35400;
   
-  --status-cleared-bg: #ebf5fb;
-  --status-cleared-border: #2980b9;
-  --status-cleared-color: #2c3e50;
+  --status-cleared-bg: #e5e7e9;
+  --status-cleared-border: #95a5a6;
+  --status-cleared-color: #566573;
   
   --status-boss-bg: #fdedec;
   --status-boss-border: #e74c3c;
@@ -409,14 +409,14 @@ body {
   100% { box-shadow: 0 0 12px rgba(243, 156, 18, 0.8); border-color: #f1c40f; }
 }
 
-/* 3. Cleared (No Boss - Green/Darkened) */
+/* 3. Cleared (No Boss - Gray) */
 .channel-card.state-cleared {
   border-color: var(--status-cleared-border);
   background-color: var(--status-cleared-bg);
   opacity: 0.95;
 }
 .channel-card.state-cleared .ch-name {
-  color: #2980b9;
+  color: var(--status-cleared-color);
 }
 
 /* 4. Boss Found (Flashing Red Danger) */
@@ -538,6 +538,7 @@ body {
 }
 /* Text and Number Input Styles */
 .input-group input[type="text"],
+.input-group input[type="password"],
 .input-group input[type="number"] {
   padding: 6px 10px;
   border: 2px solid #bdc3c7;
@@ -547,32 +548,45 @@ body {
   font-weight: bold;
 }
 .input-group input[type="text"]:focus,
+.input-group input[type="password"]:focus,
 .input-group input[type="number"]:focus {
   border-color: var(--ms-blue-mid);
 }
 
-.color-picker-container {
+/* Channel count slider */
+.input-group input[type="range"] {
+  width: 100%;
+  accent-color: var(--ms-blue-mid);
+  cursor: pointer;
+}
+#channel-count-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--ms-blue-dark);
+}
+
+/* Room code row in the settings panel */
+.room-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-input[type="color"] {
-  border: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 4px;
-  cursor: pointer;
-  outline: none;
-  background: none;
+.room-row strong {
+  margin-right: auto;
+  word-break: break-all;
 }
-.color-preview-label {
+
+/* Lobby modal */
+.lobby-tabs {
+  margin-bottom: 14px;
+}
+.lobby-error {
+  min-height: 1.2em;
+  color: var(--status-boss-color);
   font-size: 12px;
   font-weight: bold;
-  color: #555;
-  background: #f1f2f6;
-  padding: 3px 8px;
-  border-radius: 12px;
-  border: 1px solid #dcdde1;
+  margin: 0 !important;
 }
 
 /* Stats Layout */
@@ -1108,11 +1122,11 @@ input[type="color"] {
 }
 
 .channel-grid.compact-mode .channel-card.state-cleared {
-  background-color: #d4efdf; /* soft light green background */
-  border-color: #27ae60;
+  background-color: #cfd3d6; /* gray background */
+  border-color: #95a5a6;
 }
 .channel-grid.compact-mode .channel-card.state-cleared .ch-name {
-  color: #196f3d;
+  color: #4d5656;
 }
 
 .channel-grid.compact-mode .channel-card.state-boss {

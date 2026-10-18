@@ -1,14 +1,15 @@
 // Firebase Realtime Database sync layer (replaces the old WebSocket server)
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {
-  getDatabase, ref, child, push, set, update, onValue, onDisconnect,
+  getDatabase, ref, child, get, push, set, update, onValue, onDisconnect,
   query, limitToLast, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
 import { firebaseConfig } from './firebase-config.js';
 
-const DEFAULT_TOTAL_CHANNELS = 50;
+export const DEFAULT_TOTAL_CHANNELS = 1000;
 const MAX_LOGS = 150;
 
+let db = null;
 let roomRef = null;
 let presenceRef = null;
 let totalChannels = DEFAULT_TOTAL_CHANNELS;
@@ -27,11 +28,56 @@ function addLog(user, text, type, extra = {}) {
   });
 }
 
+function getDb() {
+  if (!db) db = getDatabase(initializeApp(firebaseConfig));
+  return db;
+}
+
+// PBKDF2 so the password can't be cheaply brute-forced from the public verifier
+async function derive(purpose, roomId, password) {
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(`msw-${purpose}:${roomId}`), iterations: 150000 },
+    baseKey, 256
+  );
+  return Array.from(new Uint8Array(bits), b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Room data lives at rooms/<key>, where key is derived from room ID + password,
+// so it can't be found without the password. lobby/<roomId> only holds a separate
+// verifier so we can tell "wrong password" apart from "room doesn't exist".
+export async function createRoom(roomId, password) {
+  const lobbyRef = ref(getDb(), `lobby/${roomId}`);
+  if ((await get(lobbyRef)).exists()) throw new Error('exists');
+
+  const [verifier, roomKey] = await Promise.all([
+    derive('verify', roomId, password),
+    derive('room', roomId, password)
+  ]);
+  try {
+    await set(lobbyRef, { verifier, createdAt: serverTimestamp() });
+  } catch (err) {
+    // Rules make lobby entries write-once, so losing a creation race lands here
+    if (String(err.message).includes('PERMISSION_DENIED')) throw new Error('exists');
+    throw err;
+  }
+  await set(ref(getDb(), `rooms/${roomKey}/meta/totalChannels`), DEFAULT_TOTAL_CHANNELS);
+  return roomKey;
+}
+
+export async function joinRoom(roomId, password) {
+  const snap = await get(ref(getDb(), `lobby/${roomId}`));
+  if (!snap.exists()) throw new Error('notfound');
+  const verifier = await derive('verify', roomId, password);
+  if (snap.val().verifier !== verifier) throw new Error('badpassword');
+  return derive('room', roomId, password);
+}
+
 // handlers: { onConnection(bool), onMeta(totalChannels), onChannels(sparseMap), onLogs(array), onPresence(array) }
-export function connect(roomId, user, handlers) {
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
-  roomRef = ref(db, `rooms/${roomId}`);
+export function connect(roomKey, user, handlers) {
+  const db = getDb();
+  roomRef = ref(db, `rooms/${roomKey}`);
   presenceRef = push(child(roomRef, 'presence'));
 
   let joinedLogged = false;
