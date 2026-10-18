@@ -1,0 +1,46 @@
+{
+  "rules": {
+    "rooms": {
+      "$room": {
+        ".read": "$room.matches(/^[A-Za-z0-9_-]{4,32}$/)",
+        ".write": "$room.matches(/^[A-Za-z0-9_-]{4,32}$/)",
+        "meta": {
+          "totalChannels": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 3000"
+          },
+          "$other": { ".validate": false }
+        },
+        "channels": {
+          "$ch": {
+            ".validate": "$ch.matches(/^[0-9]{1,4}$/) && newData.hasChildren(['status', 'updatedBy', 'updatedAt'])",
+            "status": { ".validate": "newData.isString() && newData.val().matches(/^(checking|cleared|boss)$/)" },
+            "updatedBy": { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "updatedAt": { ".validate": "newData.isNumber()" },
+            "$other": { ".validate": false }
+          }
+        },
+        "logs": {
+          ".indexOn": ["timestamp"],
+          "$log": {
+            ".validate": "newData.hasChildren(['timestamp', 'user', 'text', 'type'])",
+            "timestamp": { ".validate": "newData.isNumber()" },
+            "user": { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "text": { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "type": { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "color": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)" },
+            "$other": { ".validate": false }
+          }
+        },
+        "presence": {
+          "$client": {
+            ".validate": "newData.hasChildren(['username', 'color'])",
+            "username": { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "color": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)" },
+            "$other": { ".validate": false }
+          }
+        },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

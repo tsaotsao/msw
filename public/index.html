@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🍁 楓之谷頻道巡邏追蹤器 - 團隊協作版</title>
+  <meta name="description" content="專為楓之谷打王設計的頻道巡邏追蹤器，支援多人即時同步連線與狀態更新。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Import Inter for modern UI typography and Noto Sans TC for Chinese characters -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+TC:wght@400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <!-- Retro MapleStory Background Decoration -->
+  <div class="bg-decorations">
+    <div class="cloud cloud-1"></div>
+    <div class="cloud cloud-2"></div>
+    <div class="leaf leaf-1"></div>
+    <div class="leaf leaf-2"></div>
+  </div>
+
+  <div class="app-container">
+    <!-- Main Window: Channel grid, resembling MapleStory Channel Selection -->
+    <main class="ms-window channel-window">
+      <!-- Title Bar -->
+      <div class="ms-window-header">
+        <span class="ms-window-title">
+          <span class="maple-leaf-icon">🍁</span> 選擇頻道 (巡邏追蹤中)
+        </span>
+        <div class="ms-window-controls">
+          <button class="ms-btn-icon" title="靜音切換" id="mute-btn">🔊</button>
+          <button class="ms-btn-icon" title="求助" id="help-btn">?</button>
+          <button class="ms-btn-icon" title="最小化">-</button>
+          <button class="ms-btn-icon" title="最大化">⬜</button>
+          <button class="ms-btn-icon close-btn" title="關閉" onclick="alert('請直接關閉瀏覽器分頁以離開！')">×</button>
+        </div>
+      </div>
+
+      <!-- Info Banner -->
+      <div class="ms-info-banner">
+        <div class="banner-left">
+          <span>目前頻道：</span>
+          <strong id="current-ch-display" class="ch-highlight">頻道 --</strong>
+        </div>
+        <div class="banner-right">
+          <span>可供巡邏的頻道：</span>
+          <strong class="count-highlight" id="total-ch-display">50 個</strong>
+        </div>
+      </div>
+
+      <!-- Channel Grid Content -->
+      <div class="ms-window-content">
+        <div class="channel-grid" id="channel-grid">
+          <!-- Channels 1-50 will be generated dynamically here -->
+        </div>
+      </div>
+
+      <!-- Footer / Status summary -->
+      <div class="ms-window-footer">
+        <div class="progress-container">
+          <div class="progress-bar-label">巡邏進度: <span id="progress-percentage">0%</span></div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progress-bar-fill" style="width: 0%"></div>
+          </div>
+        </div>
+        <div class="connection-status">
+          <span class="status-dot disconnected" id="connection-dot"></span>
+          <span id="connection-text">正在連線...</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- Side Panel: Controls, Stats, Logs, Chat -->
+    <aside class="sidebar">
+      <!-- User Settings Card -->
+      <section class="panel-card user-card">
+        <h2 class="panel-title">👤 個人設定</h2>
+        <div class="user-inputs">
+          <div class="input-group">
+            <label for="username-input">我的暱稱：</label>
+            <input type="text" id="username-input" maxlength="10" placeholder="輸入暱稱..." value="冒險者">
+          </div>
+          <div class="input-group">
+            <label for="user-color-input">標記顏色：</label>
+            <div class="color-picker-container">
+              <input type="color" id="user-color-input" value="#4385f4">
+              <span class="color-preview-label" id="color-preview">藍色</span>
+            </div>
+          </div>
+          <div class="input-group">
+            <label>房間代碼：</label>
+            <div class="color-picker-container">
+              <strong id="room-code-display">--------</strong>
+              <button type="button" class="ms-btn ms-btn-small" id="copy-invite-btn">📋 複製邀請連結</button>
+            </div>
+          </div>
+          <div class="input-group">
+            <label for="channel-count-input">設定頻道數量 (1-3000)：</label>
+            <input type="number" id="channel-count-input" min="1" max="3000" value="50">
+          </div>
+        </div>
+      </section>
+
+      <!-- Stats Card -->
+      <section class="panel-card stats-card">
+        <h2 class="panel-title">📊 巡邏統計</h2>
+        <div class="stats-grid">
+          <div class="stat-item unchecked">
+            <span class="stat-count" id="stat-unchecked">50</span>
+            <span class="stat-label">未檢查</span>
+          </div>
+          <div class="stat-item checking">
+            <span class="stat-count" id="stat-checking">0</span>
+            <span class="stat-label">檢查中</span>
+          </div>
+          <div class="stat-item cleared">
+            <span class="stat-count" id="stat-cleared">0</span>
+            <span class="stat-label">無王</span>
+          </div>
+          <div class="stat-item boss">
+            <span class="stat-count pulse-danger" id="stat-boss">0</span>
+            <span class="stat-label">有王！</span>
+          </div>
+        </div>
+        <div class="action-buttons">
+          <button class="ms-btn ms-btn-danger" id="reset-all-btn">
+            🔄 重置所有頻道
+          </button>
+        </div>
+      </section>
+
+      <!-- Online Teammates -->
+      <section class="panel-card teammates-card">
+        <h2 class="panel-title">👥 在線隊友 (<span id="online-count">1</span>)</h2>
+        <div class="online-list" id="online-list">
+          <div class="teammate-tag system-user">載入中...</div>
+        </div>
+      </section>
+
+      <!-- Activity Log & Chat Card -->
+      <section class="panel-card log-chat-card">
+        <div class="tabs-header">
+          <button class="tab-btn active" data-tab="activity-tab">📜 巡邏日誌</button>
+          <button class="tab-btn" data-tab="chat-tab">💬 團隊聊天</button>
+        </div>
+        
+        <div class="tab-content active" id="activity-tab">
+          <div class="log-container" id="log-container">
+            <!-- Logs will be added here dynamically -->
+          </div>
+        </div>
+
+        <div class="tab-content" id="chat-tab">
+          <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+              <!-- Chat messages will be here -->
+            </div>
+            <form class="chat-input-area" id="chat-form">
+              <input type="text" id="chat-input" placeholder="發送訊息給隊友..." maxlength="50" autocomplete="off">
+              <button type="submit" class="ms-btn ms-btn-small">發送</button>
+            </form>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- Channel Action Tooltip Menu (Popover) -->
+  <div class="channel-menu-popover" id="channel-menu-popover" style="display: none;">
+    <div class="popover-title">設定 <span id="popover-ch-num">頻道 X</span> 狀態</div>
+    <div class="popover-actions">
+      <button class="popover-btn action-checking" data-status="checking">
+        <span class="popover-icon">🔍</span> 巡邏中
+      </button>
+      <button class="popover-btn action-cleared" data-status="cleared">
+        <span class="popover-icon">❌</span> 無王 (Cleared)
+      </button>
+      <button class="popover-btn action-boss" data-status="boss">
+        <span class="popover-icon">👾</span> 有王 (Spawned)
+      </button>
+      <div class="popover-divider"></div>
+      <button class="popover-btn action-reset" data-status="unchecked">
+        <span class="popover-icon">🔄</span> 重置為未檢查
+      </button>
+    </div>
+  </div>
+
+  <!-- Help Overlay Modal -->
+  <div class="modal-overlay" id="help-modal" style="display: none;">
+    <div class="ms-modal">
+      <div class="ms-window-header">
+        <span class="ms-window-title">🍁 說明手冊</span>
+        <button class="ms-btn-icon close-btn" id="close-help-btn">×</button>
+      </div>
+      <div class="ms-modal-content">
+        <h3>💡 如何使用這個追蹤器？</h3>
+        <p>1. <strong>設定暱稱</strong>：在右側面板輸入您的暱稱與代表顏色，讓隊友知道誰在標記頻道。</p>
+        <p>2. <strong>標記狀態</strong>：點擊左側頻道清單中的任一頻道，將會跳出選單，您可以選擇：</p>
+        <ul>
+          <li><strong>🔍 巡邏中</strong>：代表您正在換該頻道，避免隊友重複進去。</li>
+          <li><strong>❌ 無王</strong>：確認沒王後點選，會轉為已檢查狀態並開始計時。</li>
+          <li><strong>👾 有王</strong>：若發現王，點選後會紅光閃爍，提醒所有隊友！</li>
+        </ul>
+        <p>3. <strong>計時功能</strong>：每個被標記為「無王」或「有王」的頻道，都會顯示<b>經過時間</b>，方便您掌握王的重生週期。</p>
+        <p>4. <strong>多人協作 (房間)</strong>：網址後面的 <code>?room=xxxx</code> 就是房間代碼。按右側「📋 複製邀請連結」分享給隊友，同一個房間的人就能在任何地方<b>即時同步</b>點擊狀態與對話！</p>
+      </div>
+      <div class="ms-modal-footer">
+        <button class="ms-btn" id="close-help-confirm-btn">我知道了</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
